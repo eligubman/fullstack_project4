@@ -1,7 +1,7 @@
 // src/components/TextDisplay.jsx
 import React from 'react';
 
-export default function TextDisplay({ doc, isActive, editMode, onContentClick, onTitleClick, onClose, onDelete }) {
+export default function TextDisplay({ doc, isActive, editMode, onContentClick, onTitleClick, onClose, onDelete, onRename, searchChar }) {
   
   return (
     <div 
@@ -24,12 +24,11 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
             title="לחץ כאן כדי לערוך את שם הקובץ עם המקלדת הווירטואלית"
           >
             {doc.filename || ' '}
-            {/* הסמן שמופיע ליד השם רק כשאנחנו עורכים כותרת */}
             {isActive && editMode === 'title' && <span className="animate-pulse ml-1 text-blue-500">|</span>} ✎
           </span>
         </div>
         
-        {/* אזור הכפתורים החדש */}
+        {/* אזור הכפתורים */}
         <div className="flex gap-2">
           <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-500 hover:text-white border hover:bg-red-500 border-red-500 font-bold px-2 py-1 rounded transition-colors text-sm" title="מחק קובץ לצמיתות">
             מחק 🗑️
@@ -49,14 +48,24 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
         onClick={(e) => { e.stopPropagation(); onContentClick(); }}
       >
         <div className="min-h-[100px] break-words whitespace-pre-wrap leading-relaxed">
-          {doc.content.map((charObj, index) => (
-            <span 
-              key={index} 
-              style={{ color: charObj.color, fontSize: charObj.fontSize }}
-            >
-              {charObj.char}
-            </span>
-          ))}
+          {doc.content.map((charObj, index) => {
+            // Feature 3 : surbrillance si le caractère correspond à la recherche
+            const isHighlighted = searchChar && charObj.char === searchChar;
+            return (
+              <span 
+                key={index} 
+                style={{
+                  color: charObj.color,
+                  fontSize: charObj.fontSize,
+                  fontFamily: charObj.fontFamily || 'Arial',
+                  backgroundColor: isHighlighted ? '#facc15' : 'transparent',
+                  borderRadius: isHighlighted ? '2px' : undefined,
+                }}
+              >
+                {charObj.char}
+              </span>
+            );
+          })}
           {/* הסמן שמופיע בטקסט רק כשאנחנו עורכים תוכן */}
           {isActive && editMode === 'content' && (
             <span 
@@ -64,6 +73,7 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
               style={{ 
                 color: doc.currentStyle?.color || 'black', 
                 fontSize: doc.currentStyle?.fontSize || '16px',
+                fontFamily: doc.currentStyle?.fontFamily || 'Arial',
                 marginLeft: '2px'
               }}
             >

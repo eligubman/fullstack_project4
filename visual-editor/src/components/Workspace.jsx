@@ -1,5 +1,5 @@
 // src/components/Workspace.jsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import TextDisplay from './TextDisplay';
 import KeyboardPanel from './KeyboardPanel';
 import { saveUserFile, loadUserFile, getUserFilesList, deleteUserFile } from '../utils/storage';
@@ -7,7 +7,11 @@ import { saveUserFile, loadUserFile, getUserFilesList, deleteUserFile } from '..
 export default function Workspace({ username, onLogout }) {
   const [openDocs, setOpenDocs] = useState([]);
   const [activeDocId, setActiveDocId] = useState(null);
-  const [editMode, setEditMode] = useState('content'); 
+  const [editMode, setEditMode] = useState('content');
+  // Feature 3 : caractère recherché (partagé entre KeyboardPanel et TextDisplay)
+  const [searchChar, setSearchChar] = useState('');
+  // Historique pour le Undo : { [docId]: [ ...états précédents du content ] }
+  const historyRef = useRef({});
 
   const createNewDoc = () => {
     let counter = 1;
@@ -24,7 +28,7 @@ export default function Workspace({ username, onLogout }) {
       id: Date.now().toString(),
       filename: `doc_${counter}`,
       content: [],
-      currentStyle: { color: 'black', fontSize: '16px' }
+      currentStyle: { color: 'black', fontSize: '16px', fontFamily: 'Arial' }
     };
     
     setOpenDocs([...openDocs, newDoc]);
@@ -32,21 +36,13 @@ export default function Workspace({ username, onLogout }) {
     setEditMode('content');
   };
   
-  // התיקון שלנו: עכשיו המערכת מוחקת את השם הישן ושומרת את החדש!
   const renameDoc = (id, newName) => {
     const docToRename = openDocs.find(d => d.id === id);
     
     if (docToRename && docToRename.filename !== newName) {
-      // 1. נמחק את הקובץ עם השם הישן מה-Local Storage
       deleteUserFile(username, docToRename.filename);
-      
-      // 2. ניצור עותק מעודכן של המסמך עם השם החדש
       const updatedDoc = { ...docToRename, filename: newName };
-      
-      // 3. נעדכן את המסך (State)
       setOpenDocs(openDocs.map(doc => doc.id === id ? updatedDoc : doc));
-      
-      // 4. נשמור מיד את הקובץ עם השם החדש כדי שלא יאבד
       saveUserFile(username, newName, updatedDoc);
     }
   };
@@ -62,11 +58,21 @@ export default function Workspace({ username, onLogout }) {
     }
   };
 
+  // Feature 7 : proposer de sauvegarder avant de fermer
   const closeDoc = (id) => {
-    if(window.confirm("האם לסגור את המסמך מהתצוגה?")) {
-      setOpenDocs(openDocs.filter(doc => doc.id !== id));
-      if (activeDocId === id) setActiveDocId(null);
+    const doc = openDocs.find(d => d.id === id);
+    if (!doc) return;
+    const wantSave = window.confirm("האם לשמור לפני הסגירה?");
+    if (wantSave) {
+      saveUserFile(username, doc.filename, doc);
     }
+    // Dans tous les cas on ferme
+    setOpenDocs(openDocs.filter(d => d.id !== id));
+    if (activeDocId === id) setActiveDocId(null);
+    // Nettoyage de l'historique du doc fermé
+    const newHistory = { ...historyRef.current };
+    delete newHistory[id];
+    historyRef.current = newHistory;
   };
 
   const permanentlyDeleteDoc = (id) => {
@@ -75,12 +81,41 @@ export default function Workspace({ username, onLogout }) {
       deleteUserFile(username, doc.filename);
       setOpenDocs(openDocs.filter(d => d.id !== id));
       if (activeDocId === id) setActiveDocId(null);
+      const newHistory = { ...historyRef.current };
+      delete newHistory[id];
+      historyRef.current = newHistory;
     }
   };
 
+  // Feature 1 : updateActiveDoc sauvegarde l'état précédent du content avant chaque modif
   const updateActiveDoc = (updates) => {
-    setOpenDocs(openDocs.map(doc => 
+    // On sauvegarde l'état courant du content dans l'historique AVANT la mise à jour
+    if ('content' in updates) {
+      const currentDoc = openDocs.find(d => d.id === activeDocId);
+      if (currentDoc) {
+        if (!historyRef.current[activeDocId]) {
+          historyRef.current[activeDocId] = [];
+        }
+        historyRef.current[activeDocId] = [
+          ...historyRef.current[activeDocId],
+          currentDoc.content
+        ];
+      }
+    }
+    setOpenDocs(openDocs.map(doc =>
       doc.id === activeDocId ? { ...doc, ...updates } : doc
+    ));
+  };
+
+  // Feature 1 : Undo — restaure le dernier état du content
+  const undoActiveDoc = () => {
+    if (!activeDocId) return;
+    const history = historyRef.current[activeDocId];
+    if (!history || history.length === 0) return;
+    const previousContent = history[history.length - 1];
+    historyRef.current[activeDocId] = history.slice(0, -1);
+    setOpenDocs(openDocs.map(doc =>
+      doc.id === activeDocId ? { ...doc, content: previousContent } : doc
     ));
   };
 
@@ -133,7 +168,8 @@ export default function Workspace({ username, onLogout }) {
               onTitleClick={() => { setActiveDocId(doc.id); setEditMode('title'); }}     
               onClose={() => closeDoc(doc.id)}
               onDelete={() => permanentlyDeleteDoc(doc.id)}
-              onRename={renameDoc} // הוספנו את הגישה לפונקציה שתוקנה
+              onRename={renameDoc}
+              searchChar={searchChar}
             />
           ))
         )}
@@ -142,8 +178,11 @@ export default function Workspace({ username, onLogout }) {
       <KeyboardPanel 
         activeDoc={activeDoc}
         editMode={editMode} 
-        updateActiveDoc={updateActiveDoc} 
+        updateActiveDoc={updateActiveDoc}
         saveActiveDoc={saveActiveDoc}
+        undoActiveDoc={undoActiveDoc}
+        searchChar={searchChar}
+        setSearchChar={setSearchChar}
       />
     </div>
   );
