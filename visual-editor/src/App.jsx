@@ -26,21 +26,24 @@ export default function App() {
     setUser(null);
   };
 
-  // מסך התחברות בסיסי - חלק ד'
+  // מסך התחברות בסיסי - עונה על חלק ד' בפרויקט
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100" dir="rtl">
-        <form onSubmit={handleLogin} className="bg-white p-8 rounded shadow-md text-center">
-          <h2 className="text-2xl font-bold mb-4">התחברות לעורך הטקסט</h2>
-          <p className="text-gray-600 mb-4">הזן שם משתמש כדי לגשת לקבצים שלך</p>
+        <form onSubmit={handleLogin} className="bg-white p-8 rounded shadow-md text-center max-w-sm w-full">
+          <h2 className="text-2xl font-bold mb-4 text-blue-600">התחברות לעורך הטקסט</h2>
+          <p className="text-gray-600 mb-6">הזן שם משתמש כדי לגשת לקבצים האישיים שלך</p>
           <input 
             type="text" 
             value={loginInput}
             onChange={(e) => setLoginInput(e.target.value)}
-            className="border p-2 mb-4 w-full rounded"
-            placeholder="שם משתמש..."
+            className="border-2 border-gray-300 p-3 mb-4 w-full rounded focus:outline-none focus:border-blue-500"
+            placeholder="שם משתמש (למשל: דוד)..."
+            autoFocus
           />
-          <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded w-full">היכנס</button>
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded w-full transition-colors">
+            היכנס למערכת
+          </button>
         </form>
       </div>
     );
