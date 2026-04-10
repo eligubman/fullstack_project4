@@ -1,17 +1,11 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Workspace from './components/Workspace';
 import { getCurrentUser, loginUser, logoutUser } from './utils/storage';
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => getCurrentUser());
   const [loginInput, setLoginInput] = useState('');
-
-  // בדיקה בטעינה ראשונית האם מישהו כבר מחובר
-  useEffect(() => {
-    const savedUser = getCurrentUser();
-    if (savedUser) setUser(savedUser);
-  }, []);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -26,7 +20,6 @@ export default function App() {
     setUser(null);
   };
 
-  // מסך התחברות בסיסי - עונה על חלק ד' בפרויקט
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100" dir="rtl">
@@ -49,7 +42,6 @@ export default function App() {
     );
   }
 
-  // אזור העבודה הראשי
   return (
     <div dir="rtl">
       <Workspace username={user} onLogout={handleLogout} />

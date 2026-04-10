@@ -1,8 +1,27 @@
 // src/components/TextDisplay.jsx
 import React from 'react';
 
-export default function TextDisplay({ doc, isActive, editMode, onContentClick, onTitleClick, onClose, onDelete, onRename, searchChar }) {
+export default function TextDisplay({ doc, isActive, editMode, onContentClick, onTitleClick, onClose, onDelete, searchStr }) {
   
+  const matchIndices = new Set();
+  if (searchStr && searchStr.length > 0) {
+    const searchChars = Array.from(searchStr);
+    for (let i = 0; i <= doc.content.length - searchChars.length; i++) {
+      let match = true;
+      for (let j = 0; j < searchChars.length; j++) {
+        if (doc.content[i + j].char !== searchChars[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        for (let j = 0; j < searchChars.length; j++) {
+          matchIndices.add(i + j);
+        }
+      }
+    }
+  }
+
   return (
     <div 
       className={`border-2 flex flex-col p-4 rounded bg-white min-h-[200px] relative transition-all ${
@@ -10,13 +29,12 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
       }`}
     >
       <div className="flex justify-between items-center mb-4 border-b pb-2">
-        {/* אזור הכותרת */}
         <div 
-          className="flex-grow cursor-pointer"
+          className="flex-grow cursor-pointer flex items-center"
           onClick={(e) => { e.stopPropagation(); onTitleClick(); }}
         >
           <span 
-            className={`font-bold text-lg px-2 py-1 rounded transition-colors ${
+            className={`font-bold text-lg px-2 py-1 rounded transition-colors flex items-center ${
               isActive && editMode === 'title' 
                 ? 'bg-blue-100 border-b-2 border-blue-500 text-blue-800' 
                 : 'hover:bg-gray-100 text-gray-600 border-b-2 border-transparent'
@@ -24,11 +42,12 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
             title="לחץ כאן כדי לערוך את שם הקובץ עם המקלדת הווירטואלית"
           >
             {doc.filename || ' '}
-            {isActive && editMode === 'title' && <span className="animate-pulse ml-1 text-blue-500">|</span>} ✎
+            {/* הכוכבית האדומה המגניבה שמופיעה כשהקובץ שונה ולא נשמר */}
+            {doc.isDirty && <span className="text-red-500 text-xl leading-none ml-1" title="מסמך זה מכיל שינויים שלא נשמרו">*</span>}
+            {isActive && editMode === 'title' && <span className="animate-pulse ml-1 text-blue-500">|</span>} <span className="mr-2 text-sm opacity-50">✎</span>
           </span>
         </div>
         
-        {/* אזור הכפתורים */}
         <div className="flex gap-2">
           <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-red-500 hover:text-white border hover:bg-red-500 border-red-500 font-bold px-2 py-1 rounded transition-colors text-sm" title="מחק קובץ לצמיתות">
             מחק 🗑️
@@ -39,7 +58,6 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
         </div>
       </div>
       
-      {/* אזור התוכן */}
       <div 
         className={`flex-grow p-4 rounded overflow-y-auto text-right cursor-text transition-colors ${
           isActive && editMode === 'content' ? 'bg-green-50 ring-1 ring-green-200' : 'bg-gray-50'
@@ -49,8 +67,7 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
       >
         <div className="min-h-[100px] break-words whitespace-pre-wrap leading-relaxed">
           {doc.content.map((charObj, index) => {
-            // Feature 3 : surbrillance si le caractère correspond à la recherche
-            const isHighlighted = searchChar && charObj.char === searchChar;
+            const isHighlighted = matchIndices.has(index);
             return (
               <span 
                 key={index} 
@@ -60,13 +77,13 @@ export default function TextDisplay({ doc, isActive, editMode, onContentClick, o
                   fontFamily: charObj.fontFamily || 'Arial',
                   backgroundColor: isHighlighted ? '#facc15' : 'transparent',
                   borderRadius: isHighlighted ? '2px' : undefined,
+                  padding: isHighlighted ? '0 1px' : '0'
                 }}
               >
                 {charObj.char}
               </span>
             );
           })}
-          {/* הסמן שמופיע בטקסט רק כשאנחנו עורכים תוכן */}
           {isActive && editMode === 'content' && (
             <span 
               className="animate-pulse font-light"

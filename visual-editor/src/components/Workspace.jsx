@@ -8,10 +8,14 @@ export default function Workspace({ username, onLogout }) {
   const [openDocs, setOpenDocs] = useState([]);
   const [activeDocId, setActiveDocId] = useState(null);
   const [editMode, setEditMode] = useState('content');
-  // Feature 3 : caractère recherché (partagé entre KeyboardPanel et TextDisplay)
-  const [searchChar, setSearchChar] = useState('');
-  // Historique pour le Undo : { [docId]: [ ...états précédents du content ] }
+  const [searchStr, setSearchStr] = useState('');
+  const [replaceStr, setReplaceStr] = useState('');
+  
   const historyRef = useRef({});
+  const searchHistoryRef = useRef([]);
+  const replaceHistoryRef = useRef([]);
+
+  const generateUniqueId = () => Date.now().toString() + Math.random().toString(36).substring(2, 9);
 
   const createNewDoc = () => {
     let counter = 1;
@@ -25,51 +29,68 @@ export default function Workspace({ username, onLogout }) {
     }
 
     const newDoc = {
-      id: Date.now().toString(),
+      id: generateUniqueId(),
       filename: `doc_${counter}`,
+      savedFilename: null,
       content: [],
-      currentStyle: { color: 'black', fontSize: '16px', fontFamily: 'Arial' }
+      currentStyle: { color: 'black', fontSize: '16px', fontFamily: 'Arial' },
+      isDirty: false
     };
     
-    setOpenDocs([...openDocs, newDoc]);
+    setOpenDocs(prev => [...prev, newDoc]);
     setActiveDocId(newDoc.id);
     setEditMode('content');
-  };
-  
-  const renameDoc = (id, newName) => {
-    const docToRename = openDocs.find(d => d.id === id);
-    
-    if (docToRename && docToRename.filename !== newName) {
-      deleteUserFile(username, docToRename.filename);
-      const updatedDoc = { ...docToRename, filename: newName };
-      setOpenDocs(openDocs.map(doc => doc.id === id ? updatedDoc : doc));
-      saveUserFile(username, newName, updatedDoc);
-    }
   };
   
   const loadExistingFile = (filename) => {
     const data = loadUserFile(username, filename);
     if (data) {
-      if (!openDocs.find(d => d.filename === filename)) {
-        setOpenDocs([...openDocs, data]);
-      }
+      data.savedFilename = filename;
+      data.isDirty = false;
+      if (!data.id) data.id = generateUniqueId();
+
+      setOpenDocs(prev => {
+        if (!prev.find(d => d.filename === filename)) return [...prev, data];
+        return prev;
+      });
       setActiveDocId(data.id);
       setEditMode('content');
     }
   };
 
-  // Feature 7 : proposer de sauvegarder avant de fermer
+  const renameDoc = (id, newName) => {
+    setOpenDocs(prevDocs => {
+      const docIndex = prevDocs.findIndex(d => d.id === id);
+      if (docIndex === -1) return prevDocs;
+
+      const docToRename = prevDocs[docIndex];
+      if (docToRename.filename === newName) return prevDocs;
+
+      deleteUserFile(username, docToRename.filename);
+      const updatedDoc = { ...docToRename, filename: newName, savedFilename: newName, isDirty: false };
+      saveUserFile(username, newName, updatedDoc);
+
+      const newDocs = [...prevDocs];
+      newDocs[docIndex] = updatedDoc;
+      return newDocs;
+    });
+  };
+
   const closeDoc = (id) => {
     const doc = openDocs.find(d => d.id === id);
     if (!doc) return;
-    const wantSave = window.confirm("האם לשמור לפני הסגירה?");
-    if (wantSave) {
-      saveUserFile(username, doc.filename, doc);
+    
+    if (doc.isDirty) {
+      const wantSave = window.confirm(`הקובץ "${doc.filename}" לא נשמר. האם לשמור לפני הסגירה?`);
+      if (wantSave) {
+        const docToSave = { ...doc, isDirty: false, savedFilename: doc.filename };
+        saveUserFile(username, doc.filename, docToSave);
+      }
     }
-    // Dans tous les cas on ferme
-    setOpenDocs(openDocs.filter(d => d.id !== id));
-    if (activeDocId === id) setActiveDocId(null);
-    // Nettoyage de l'historique du doc fermé
+
+    setOpenDocs(prev => prev.filter(d => d.id !== id));
+    setActiveDocId(prev => (prev === id ? null : prev));
+    
     const newHistory = { ...historyRef.current };
     delete newHistory[id];
     historyRef.current = newHistory;
@@ -77,53 +98,77 @@ export default function Workspace({ username, onLogout }) {
 
   const permanentlyDeleteDoc = (id) => {
     const doc = openDocs.find(d => d.id === id);
+    if (!doc) return;
+
     if (window.confirm(`אזהרה: האם למחוק את הקובץ "${doc.filename}" לצמיתות מזיכרון המחשב?`)) {
-      deleteUserFile(username, doc.filename);
-      setOpenDocs(openDocs.filter(d => d.id !== id));
-      if (activeDocId === id) setActiveDocId(null);
+      deleteUserFile(username, doc.savedFilename || doc.filename);
+      setOpenDocs(prev => prev.filter(d => d.id !== id));
+      setActiveDocId(prev => (prev === id ? null : prev));
       const newHistory = { ...historyRef.current };
       delete newHistory[id];
       historyRef.current = newHistory;
     }
   };
 
-  // Feature 1 : updateActiveDoc sauvegarde l'état précédent du content avant chaque modif
   const updateActiveDoc = (updates) => {
-    // On sauvegarde l'état courant du content dans l'historique AVANT la mise à jour
-    if ('content' in updates) {
-      const currentDoc = openDocs.find(d => d.id === activeDocId);
-      if (currentDoc) {
-        if (!historyRef.current[activeDocId]) {
-          historyRef.current[activeDocId] = [];
-        }
-        historyRef.current[activeDocId] = [
-          ...historyRef.current[activeDocId],
-          currentDoc.content
-        ];
+    setOpenDocs(prevDocs => {
+      const docIndex = prevDocs.findIndex(d => d.id === activeDocId);
+      if (docIndex === -1) return prevDocs;
+
+      const currentDoc = prevDocs[docIndex];
+
+      if ('content' in updates) {
+        if (!historyRef.current[activeDocId]) historyRef.current[activeDocId] = [];
+        historyRef.current[activeDocId].push(currentDoc);
       }
-    }
-    setOpenDocs(openDocs.map(doc =>
-      doc.id === activeDocId ? { ...doc, ...updates } : doc
-    ));
+
+      const updatedDocs = [...prevDocs];
+      updatedDocs[docIndex] = { ...currentDoc, ...updates, isDirty: true };
+      return updatedDocs;
+    });
   };
 
-  // Feature 1 : Undo — restaure le dernier état du content
-  const undoActiveDoc = () => {
-    if (!activeDocId) return;
-    const history = historyRef.current[activeDocId];
-    if (!history || history.length === 0) return;
-    const previousContent = history[history.length - 1];
-    historyRef.current[activeDocId] = history.slice(0, -1);
-    setOpenDocs(openDocs.map(doc =>
-      doc.id === activeDocId ? { ...doc, content: previousContent } : doc
-    ));
+  const handleSearchUpdate = (updater) => {
+    setSearchStr(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      searchHistoryRef.current.push(prev);
+      return next;
+    });
+  };
+
+  const handleReplaceUpdate = (updater) => {
+    setReplaceStr(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      replaceHistoryRef.current.push(prev);
+      return next;
+    });
+  };
+
+  const handleUndo = () => {
+    if (editMode === 'title' || editMode === 'content') {
+      if (!activeDocId) return;
+      const history = historyRef.current[activeDocId];
+      if (!history || history.length === 0) return;
+      const previousDocState = history.pop();
+      setOpenDocs(prevDocs => prevDocs.map(doc => doc.id === activeDocId ? { ...previousDocState, isDirty: true } : doc));
+    } else if (editMode === 'search') {
+      if (searchHistoryRef.current.length > 0) setSearchStr(searchHistoryRef.current.pop());
+    } else if (editMode === 'replace') {
+      if (replaceHistoryRef.current.length > 0) setReplaceStr(replaceHistoryRef.current.pop());
+    }
   };
 
   const saveActiveDoc = () => {
     const docToSave = openDocs.find(d => d.id === activeDocId);
     if (docToSave) {
-      saveUserFile(username, docToSave.filename, docToSave);
-      alert('המסמך נשמר בהצלחה תחת השם: ' + docToSave.filename);
+      if (docToSave.savedFilename && docToSave.savedFilename !== docToSave.filename) {
+        deleteUserFile(username, docToSave.savedFilename);
+      }
+      const updatedDocToSave = { ...docToSave, savedFilename: docToSave.filename, isDirty: false };
+      saveUserFile(username, updatedDocToSave.filename, updatedDocToSave);
+      
+      setOpenDocs(prevDocs => prevDocs.map(doc => doc.id === activeDocId ? updatedDocToSave : doc));
+      alert('המסמך נשמר בהצלחה תחת השם: ' + updatedDocToSave.filename);
     }
   };
 
@@ -169,7 +214,7 @@ export default function Workspace({ username, onLogout }) {
               onClose={() => closeDoc(doc.id)}
               onDelete={() => permanentlyDeleteDoc(doc.id)}
               onRename={renameDoc}
-              searchChar={searchChar}
+              searchStr={searchStr}
             />
           ))
         )}
@@ -177,12 +222,15 @@ export default function Workspace({ username, onLogout }) {
 
       <KeyboardPanel 
         activeDoc={activeDoc}
-        editMode={editMode} 
+        editMode={editMode}
+        setEditMode={setEditMode}
         updateActiveDoc={updateActiveDoc}
         saveActiveDoc={saveActiveDoc}
-        undoActiveDoc={undoActiveDoc}
-        searchChar={searchChar}
-        setSearchChar={setSearchChar}
+        undoActiveDoc={handleUndo}
+        searchStr={searchStr}
+        setSearchStr={handleSearchUpdate}
+        replaceStr={replaceStr}
+        setReplaceStr={handleReplaceUpdate}
       />
     </div>
   );

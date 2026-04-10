@@ -23,7 +23,6 @@ export const loadUserFile = (username, filename) => {
   return data ? JSON.parse(data) : null;
 };
 
-// הפיצ'ר החדש: מחיקת קובץ מהזיכרון
 export const deleteUserFile = (username, filename) => {
   const key = `editor_${username}_${filename}`;
   localStorage.removeItem(key);
@@ -39,4 +38,15 @@ export const getUserFilesList = (username) => {
     }
   }
   return files;
+};
+
+// --- הפיצ'רים החדשים: שמירה וטעינה של "הלשוניות הפתוחות" ---
+
+export const saveUserWorkspace = (username, openFilenames) => {
+  localStorage.setItem(`workspace_${username}`, JSON.stringify(openFilenames));
+};
+
+export const loadUserWorkspace = (username) => {
+  const data = localStorage.getItem(`workspace_${username}`);
+  return data ? JSON.parse(data) : [];
 };
