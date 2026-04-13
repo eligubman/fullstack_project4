@@ -23,8 +23,13 @@ export const registerAccount = (username, password) => {
   if (registry[normalizedUsername]) {
     return { error: 'שם המשתמש כבר קיים במערכת' };
   }
-  // יצירת ה-hash של הסיסמה באמצעות btoa
-  const hashedPassword = btoa(normalizedUsername + ':' + password);
+  // הצפנת הסיסמה בלבד עם btoa - אם הסיסמה מכילה תווים לא תקינים btoa זורק שגיאה
+  let hashedPassword;
+  try {
+    hashedPassword = btoa(password);
+  } catch (e) {
+    return { error: 'הסיסמה מכילה תווים לא חוקיים, השתמש באותיות לטיניות ומספרים' };
+  }
   // שמירת החשבון החדש במאגר
   registry[normalizedUsername] = hashedPassword;
   localStorage.setItem('auth_accounts', JSON.stringify(registry));
@@ -38,8 +43,13 @@ export const verifyLogin = (username, password) => {
   const registry = getAccountsRegistry();
   const storedHash = registry[normalizedUsername];
   if (!storedHash) return false;
-  // השוואת ה-hash המחושב עם הה-hash השמור
-  const expectedHash = btoa(normalizedUsername + ':' + password);
+  // השוואת ה-hash של הסיסמה - אם btoa נכשל הסיסמה בוודאי לא תואמת
+  let expectedHash;
+  try {
+    expectedHash = btoa(password);
+  } catch (e) {
+    return false;
+  }
   return storedHash === expectedHash;
 };
 
