@@ -1,3 +1,50 @@
+// ========== אימות משתמשים ==========
+
+// פונקציה לקבלת מאגר כל החשבונות הרשומים
+export const getAccountsRegistry = () => {
+  const data = localStorage.getItem('auth_accounts');
+  return data ? JSON.parse(data) : {};
+};
+
+// פונקציה לרישום משתמש חדש עם שם משתמש וסיסמה
+export const registerAccount = (username, password) => {
+  // בדיקת אורך שם משתמש
+  if (!username || username.trim().length < 3) {
+    return { error: 'שם משתמש חייב להכיל לפחות 3 תווים' };
+  }
+  // בדיקת אורך סיסמה
+  if (!password || password.length < 4) {
+    return { error: 'הסיסמה חייבת להכיל לפחות 4 תווים' };
+  }
+  // טעינת המאגר הנוכחי
+  const registry = getAccountsRegistry();
+  // בדיקה אם שם המשתמש כבר קיים (לא תלוי רישיות)
+  const normalizedUsername = username.trim().toLowerCase();
+  if (registry[normalizedUsername]) {
+    return { error: 'שם המשתמש כבר קיים במערכת' };
+  }
+  // יצירת ה-hash של הסיסמה באמצעות btoa
+  const hashedPassword = btoa(normalizedUsername + ':' + password);
+  // שמירת החשבון החדש במאגר
+  registry[normalizedUsername] = hashedPassword;
+  localStorage.setItem('auth_accounts', JSON.stringify(registry));
+  return { success: true };
+};
+
+// פונקציה לאימות פרטי התחברות של משתמש
+export const verifyLogin = (username, password) => {
+  if (!username || !password) return false;
+  const normalizedUsername = username.trim().toLowerCase();
+  const registry = getAccountsRegistry();
+  const storedHash = registry[normalizedUsername];
+  if (!storedHash) return false;
+  // השוואת ה-hash המחושב עם הה-hash השמור
+  const expectedHash = btoa(normalizedUsername + ':' + password);
+  return storedHash === expectedHash;
+};
+
+// ========== ניהול משתמש נוכחי ==========
+
 // פונקציה לשמירת שם המשתמש הנוכחי ב-localStorage
 export const loginUser = (username) => {
   // שמירת שם המשתמש בתא זיכרון עם שם מפתח 'currentUser'
